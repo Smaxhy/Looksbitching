@@ -16,7 +16,9 @@ Next.js 15 (static export) + Tailwind 4. State lives in `localStorage`; photos a
 
 1. **Today**: day X of 60, streak badges (7/30/60), today's sessions, quick check-in, next glow-up actions.
 2. **Posture**: 8-week progressive calendar (days unlock daily, recovery days every 7th), exercise library with guided timers, and an evidence page.
-3. **Scan**: camera/upload with outline guides, landmark analysis (symmetry, tilt, jaw edge, skin metrics), manual craniovertebral and cervicomental angle tools, four 1-10 scores with "how built" breakdowns, and a checkable action list.
+3. **Scan**: front, side and optional full-body photos plus body measurements. On-device analysis (MediaPipe face and pose models) produces about 30 measurements: face proportions, eyes and brows, nose, lips, jaw, chin, cheekbones, skin, symmetry, five profile angles you place yourself (head posture, chin-neck, jaw angle, nose-lip, profile convexity), posture from joint positions, waist-to-height, waist-to-hip, estimated body fat and V-taper. Each is scored 1-10 against a stated reference or marked descriptive, drawn on a face/body overlay, rolled into category scores and a checkable action list. An optional **AI deep review** sends photos to Claude using your own API key. It is opt-in and the only feature that leaves the device.
+
+   A photo shows soft-tissue outline, not bone, so bone-structure items are labelled as outline-based inferences. Reference ranges come from facial-plastic-surgery, orthodontic and anthropometry literature. Many have wide normal variation and are descriptive rather than "ideal".
 4. **Routine**: water, AM/PM skincare, posture check-ins, sessions, sleep, weight; reminders; Day 1 / 30 / 60 photo comparison.
 
 ## What the research does and does not support
