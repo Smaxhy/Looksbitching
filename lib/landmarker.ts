@@ -1,4 +1,5 @@
 import type { FaceLandmarker } from "@mediapipe/tasks-vision";
+import { BASE } from "./base";
 
 let pending: Promise<FaceLandmarker> | null = null;
 
@@ -7,10 +8,10 @@ export function getLandmarker(): Promise<FaceLandmarker> {
   if (!pending) {
     pending = (async () => {
       const { FilesetResolver, FaceLandmarker } = await import("@mediapipe/tasks-vision");
-      const fileset = await FilesetResolver.forVisionTasks("/mediapipe");
+      const fileset = await FilesetResolver.forVisionTasks(`${BASE}/mediapipe`);
       const make = (delegate: "GPU" | "CPU") =>
         FaceLandmarker.createFromOptions(fileset, {
-          baseOptions: { modelAssetPath: "/models/face_landmarker.task", delegate },
+          baseOptions: { modelAssetPath: `${BASE}/models/face_landmarker.task`, delegate },
           runningMode: "IMAGE",
           numFaces: 1,
           outputFacialTransformationMatrixes: true,

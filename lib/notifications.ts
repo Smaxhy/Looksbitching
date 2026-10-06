@@ -1,4 +1,5 @@
 import type { ReminderSettings } from "./types";
+import { BASE } from "./base";
 import { fmtTime, hhmmToMinutes, minutesToHHMM, dateKey } from "./dates";
 
 export interface Reminder {
@@ -43,7 +44,7 @@ export async function ensureServiceWorker(): Promise<ServiceWorkerRegistration |
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return null;
   try {
     const prod = process.env.NODE_ENV === "production";
-    return await navigator.serviceWorker.register(`/sw.js${prod ? "?cache=1" : ""}`);
+    return await navigator.serviceWorker.register(`${BASE}/sw.js${prod ? "?cache=1" : ""}`);
   } catch {
     return null;
   }
@@ -58,7 +59,7 @@ export async function showNotification(title: string, body: string, tag: string,
   if (!notificationsSupported() || Notification.permission !== "granted") return false;
   try {
     const reg = (await ensureServiceWorker()) ?? (await navigator.serviceWorker?.getRegistration());
-    const opts: NotificationOptions = { body, tag, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", data: { tab } };
+    const opts: NotificationOptions = { body, tag, icon: `${BASE}/icons/icon-192.png`, badge: `${BASE}/icons/icon-192.png`, data: { tab } };
     if (reg) await reg.showNotification(title, opts);
     else new Notification(title, opts);
     return true;

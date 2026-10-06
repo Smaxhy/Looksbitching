@@ -15,7 +15,7 @@ self.addEventListener("fetch", (e) => {
   if (!CACHE_ENABLED) return;
   const req = e.request;
   const url = new URL(req.url);
-  if (req.method !== "GET" || url.origin !== self.location.origin || url.pathname === "/sw.js") return;
+  if (req.method !== "GET" || url.origin !== self.location.origin || url.pathname.endsWith("/sw.js")) return;
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const hit = await cache.match(req);
@@ -34,6 +34,6 @@ self.addEventListener("notificationclick", (e) => {
       c.postMessage({ type: "open-tab", tab });
       return;
     }
-    await self.clients.openWindow("/#" + tab);
+    await self.clients.openWindow(self.registration.scope + "#" + tab);
   })());
 });
