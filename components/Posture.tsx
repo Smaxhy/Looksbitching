@@ -7,6 +7,7 @@ import { describe, EXERCISES, getDayPlan, PROGRAM_DAYS, REST_DAYS, WEEKS, studie
 import { STUDIES } from "@/lib/evidence";
 import { addDays, fmtDate } from "@/lib/dates";
 import { dayCounts } from "@/lib/habits";
+import { Demo, PostureCompare } from "./Demo";
 
 type View = "calendar" | "library" | "evidence";
 
@@ -156,14 +157,16 @@ function Library() {
   const all = [...plan.morning, ...plan.evening];
   return (
     <section className="grid gap-3 sm:grid-cols-2">
+      <div className="glass grid gap-3 p-4 sm:col-span-2 md:grid-cols-[1fr_1.3fr] md:items-center">
+        <div><div className="label">Aim for this all day</div><h3 className="font-display text-xl font-bold">Ears over shoulders</h3><p className="mt-1 text-sm text-ink-2">Forward head posture is the one thing here with strong research behind it. Every exercise below trains the muscles that hold your head back where it belongs. Tap any card to see it animated.</p></div>
+        <PostureCompare />
+      </div>
       {Object.values(EXERCISES).map((ex) => {
         const rx = all.find((p) => p.exercise === ex.id);
         return (
           <button key={ex.id} onClick={() => setOpen(ex.id)} className="glass flex flex-col gap-3 p-4 text-left transition hover:-translate-y-0.5 hover:border-vio-2/40">
-            <div className="flex items-start justify-between gap-3">
-              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${ex.accent === "vio" ? "bg-vio/20 text-vio-3" : "bg-emr/20 text-emr-3"}`}><Icon name={ex.id === "chin-tuck" || ex.id === "neck-flexor-curl" ? "posture" : "zap"} size={22} /></span>
-              <GradeChip grade={ex.grade} />
-            </div>
+            <Demo id={ex.id} compact />
+            <div className="flex items-center justify-between gap-2"><GradeChip grade={ex.grade} /><span className="flex items-center gap-1 text-xs font-bold text-vio-3"><Icon name="play" size={12} /> How to</span></div>
             <div><div className="font-display text-lg font-bold leading-tight">{ex.name}</div><div className="mt-1 text-sm text-ink-2">{ex.short}</div></div>
             <div className="mt-auto flex items-center justify-between text-xs text-ink-3"><span>{ex.target}</span><span className="font-bold text-ink-2 tnum">{rx ? `Today: ${describe(rx)}` : "Not scheduled today"}</span></div>
           </button>
@@ -174,6 +177,7 @@ function Library() {
           const ex = EXERCISES[open];
           return (
             <div className="grid gap-5">
+              <Demo id={open} />
               <div className="flex flex-wrap items-center gap-2"><GradeChip grade={ex.grade} /><span className="chip">{ex.target}</span></div>
               <p className="text-sm text-ink-2">{ex.evidenceNote}</p>
               <div><div className="label mb-2">How to do it</div><ol className="grid gap-2">{ex.steps.map((s, i) => <li key={i} className="glass-flat flex gap-3 p-3 text-sm"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-vio/25 text-xs font-bold text-vio-3">{i + 1}</span>{s}</li>)}</ol></div>

@@ -4,6 +4,7 @@ import { useApp } from "@/lib/store";
 import { useShell } from "./Shell";
 import { useData } from "./data";
 import { Bar, Icon, Ring, SectionTitle } from "./ui";
+import { Demo } from "./Demo";
 import { describe, EXERCISES, getDayPlan, MILESTONES, PROGRAM_DAYS, prescriptionMinutes } from "@/lib/program";
 import { dayScore, habitItems, sleepAvg7d, waterRatio7d } from "@/lib/habits";
 import { buildActions } from "@/lib/analysis";
@@ -11,8 +12,8 @@ import { STUDIES } from "@/lib/evidence";
 import { addDays, fmtDate } from "@/lib/dates";
 
 export function Dashboard() {
-  const { state, day, today, streak, updateLog, setAction } = useApp();
-  const { go, startSession, runExercise } = useShell();
+  const { state, day, today, streak, updateLog, setAction, setSettings } = useApp();
+  const { go, startSession, runExercise, openHelp } = useShell();
   const { scans } = useData();
   const s = state.settings;
   const log = state.logs[today];
@@ -34,6 +35,17 @@ export function Dashboard() {
 
   const water = log?.waterMl ?? 0;
   const bump = (fn: Parameters<typeof updateLog>[1]) => updateLog(today, fn);
+  const nextKind: "am" | "pm" | null = !log?.sessionAM ? "am" : !log?.sessionPM ? "pm" : null;
+  const nextList = nextKind === "am" ? plan.morning : nextKind === "pm" ? plan.evening : [];
+  const nextMins = nextList.reduce((a, p) => a + prescriptionMinutes(p), 0);
+  const anyDone = Object.values(state.logs).some((l) => l.sessionAM || l.sessionPM || l.done.length);
+  const guide = [
+    { done: scans.length > 0, label: "Take your baseline scan", sub: "Front and side photos", go: () => go("scan") },
+    { done: anyDone, label: "Do your first session", sub: "Tap Start above, follow the timer", go: () => nextKind && startSession(nextKind) },
+    { done: s.reminders.enabled, label: "Turn on reminders", sub: "Posture, hyoid, skincare, water", go: () => go("routine") },
+    { done: water > 0, label: "Log some water", sub: "Use + Glass below", go: () => {} },
+  ];
+  const guideDone = guide.filter((g) => g.done).length;
 
   return (
     <div className="grid gap-5 lg:grid-cols-12">
@@ -58,6 +70,46 @@ export function Dashboard() {
           </div>
         </div>
       </section>
+
+      {/* up next */}
+      {started && !finished && (
+        <section className="glass-hero shine relative overflow-hidden p-5 sm:p-6 lg:col-span-12">
+          {nextKind ? (
+            <div className="grid items-center gap-5 sm:grid-cols-[1fr_15rem]">
+              <div className="grid gap-3">
+                <div className="flex items-center gap-2"><span className="chip chip-vio"><Icon name={nextKind === "am" ? "sun" : "moon"} size={13} /> Up next</span><span className="text-xs font-semibold text-ink-2 tnum">about {nextMins} min</span></div>
+                <h2 className="font-display text-3xl font-extrabold leading-tight sm:text-4xl">{nextKind === "am" ? "Morning" : "Evening"} {plan.rest ? "recovery" : "session"}</h2>
+                <p className="text-sm text-ink-2">{nextList.map((p) => EXERCISES[p.exercise].name.split(" (")[0]).join(" · ")}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button className="btn btn-vio !px-6 !py-3 text-base" onClick={() => startSession(nextKind)}><Icon name="play" size={20} /> Start now</button>
+                  <button className="btn" onClick={openHelp}>How it works</button>
+                </div>
+              </div>
+              <Demo id={nextList[0].exercise} compact className="hidden sm:block [&>div]:!h-40" />
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-4"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-emr/25 text-emr-3"><Icon name="trophy" size={28} /></span><div className="min-w-0 flex-1"><h2 className="font-display text-2xl font-extrabold">Both sessions done today</h2><p className="text-sm text-ink-2">Keep checking your posture and finish water, skincare and sleep to lock in the streak.</p></div><button className="btn" onClick={() => go("routine")}>Open checklist</button></div>
+          )}
+        </section>
+      )}
+
+      {/* start here */}
+      {!s.guideDismissed && started && (
+        <section className="glass p-5 lg:col-span-12">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <SectionTitle eyebrow={`Start here · ${guideDone}/4`} title="Get set up in 2 minutes" />
+            <button className="btn btn-sm btn-ghost" onClick={() => setSettings({ guideDismissed: true })}>Hide</button>
+          </div>
+          <div className="mt-3"><Bar value={guideDone / 4} /></div>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {guide.map((g) => (
+              <li key={g.label}><button onClick={g.go} className={`flex h-full w-full items-center gap-3 rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 ${g.done ? "border-emr-2/30 bg-emr/[0.07]" : "border-line bg-white/[0.04] hover:border-vio-2/40"}`}>
+                <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${g.done ? "bg-emr text-[#04140d]" : "bg-white/10 text-ink-3"}`}><Icon name={g.done ? "check" : "chev"} size={16} stroke={g.done ? 3 : 2} /></span>
+                <span className="min-w-0"><span className={`block text-sm font-bold ${g.done ? "text-ink-3 line-through" : ""}`}>{g.label}</span><span className="block text-xs text-ink-3">{g.sub}</span></span></button></li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* streak */}
       <section className="glass p-5 lg:col-span-4">

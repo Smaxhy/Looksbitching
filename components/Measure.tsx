@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { angleAt, craniovertebralAngle } from "@/lib/analysis";
 import type { Measures } from "@/lib/types";
 import { Icon } from "./ui";
+import { MeasureExample } from "./Demo";
 
 type Mode = "cva" | "cma";
 interface P { x: number; y: number } // normalised 0..1
@@ -86,6 +87,7 @@ export function Measure({ src, value, onChange }: { src: string; value: Measures
         ))}
       </div>
       <div className="grid content-start gap-3">
+        <details open={cur.length === 0 && !value.cvaDeg} className="glass-flat p-3 text-sm"><summary className="cursor-pointer font-bold">Where do I tap? (example)</summary><div className="mt-2"><MeasureExample /></div></details>
         <div className="flex gap-1 rounded-xl border border-line bg-white/[0.04] p-1">
           {(["cva", "cma"] as Mode[]).map((m) => (
             <button key={m} onClick={() => setMode(m)} className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold ${mode === m ? "bg-vio/50 text-white" : "text-ink-3"}`}>{m === "cva" ? "Head posture (CVA)" : "Chin–neck (CMA)"}</button>

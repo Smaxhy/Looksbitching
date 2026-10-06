@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EXERCISES, describe, type Prescription } from "@/lib/program";
 import { useApp } from "@/lib/store";
 import { Icon, Modal } from "./ui";
+import { Demo } from "./Demo";
 
 interface Phase { kind: "hold" | "rest" | "setrest" | "prep"; secs: number; label: string; sub: string; set: number; rep: number }
 
@@ -126,7 +127,7 @@ export function Runner({ open, onClose, title, items, onComplete }: { open: bool
   const ph = phases[pi];
   const total = ph?.secs || 1;
   const frac = Math.min(1, Math.max(0, left / total));
-  const R = 108, C = 2 * Math.PI * R;
+  const R = 90, C = 2 * Math.PI * R;
   const tone = ph?.kind === "hold" ? "#8b5cf6" : ph?.kind === "prep" ? "#c4b5fd" : "#10b981";
   const overallDone = phases.length ? pi / phases.length : 0;
 
@@ -148,6 +149,7 @@ export function Runner({ open, onClose, title, items, onComplete }: { open: bool
               <p className="text-sm text-ink-2">{cur && describe(cur)}{cur?.note ? ` · ${cur.note}` : ""}</p>
             </div>
           </div>
+          {cur && <Demo id={cur.exercise} />}
           <ol className="grid gap-2">
             {ex?.steps.map((s, i) => (
               <li key={i} className="glass-flat flex gap-3 p-3 text-sm"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-vio/25 text-xs font-bold text-vio-3">{i + 1}</span><span>{s}</span></li>
@@ -162,14 +164,15 @@ export function Runner({ open, onClose, title, items, onComplete }: { open: bool
       ) : (
         <div className="grid place-items-center gap-4 text-center">
           <div className="label">{ex?.name} · {cur?.exercise === "tongue-posture" ? "1 minute" : `set ${ph?.set}/${cur?.sets}${ph?.kind !== "prep" ? ` · rep ${ph?.rep}/${cur?.exercise === "tongue-stretch" ? 4 : cur?.reps}` : ""}`}</div>
-          <div className="relative grid place-items-center" style={{ width: 260, height: 260 }}>
+          {cur && <div className="w-full max-w-xs"><Demo id={cur.exercise} compact /></div>}
+          <div className="relative grid place-items-center" style={{ width: 220, height: 220 }}>
             {ph?.kind === "hold" && running && <span className="absolute inset-6 rounded-full" style={{ background: `radial-gradient(circle, ${tone}55, transparent 70%)`, animation: "breathe 3s ease-in-out infinite" }} />}
-            <svg width="260" height="260" className="-rotate-90" aria-hidden="true">
-              <circle cx="130" cy="130" r={R} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="14" />
-              <circle cx="130" cy="130" r={R} fill="none" stroke={tone} strokeWidth="14" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)} style={{ transition: "stroke .2s" }} />
+            <svg width="220" height="220" className="-rotate-90" aria-hidden="true">
+              <circle cx="110" cy="110" r={R} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="14" />
+              <circle cx="110" cy="110" r={R} fill="none" stroke={tone} strokeWidth="14" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)} style={{ transition: "stroke .2s" }} />
             </svg>
             <div className="absolute grid place-items-center">
-              <div className="font-display text-6xl font-extrabold tnum" aria-live="off">{Math.ceil(left)}</div>
+              <div className="font-display text-5xl font-extrabold tnum" aria-live="off">{Math.ceil(left)}</div>
               <div className="label" style={{ color: tone }}>{ph?.label}</div>
             </div>
           </div>

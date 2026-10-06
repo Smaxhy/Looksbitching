@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./ui";
+import { PostureCompare } from "./Demo";
 
 /** Downscale to <=1024px JPEG so IndexedDB stays small. */
 export function fileToDataUrl(file: File | Blob, max = 1024): Promise<string> {
@@ -97,6 +98,16 @@ export function Capture({ kind, onCapture }: { kind: "front" | "side"; onCapture
         {count > 0 && <div className="absolute inset-0 grid place-items-center bg-black/30 font-display text-8xl font-extrabold">{count}</div>}
       </div>
       {err && <p className="text-center text-sm text-bad">{err}</p>}
+      <details open className="glass-flat mx-auto w-full max-w-sm p-3 text-sm">
+        <summary className="cursor-pointer font-bold">How to get a good {kind} photo</summary>
+        <ul className="mt-2 grid gap-1.5 text-ink-2">
+          {(kind === "front"
+            ? ["Face a window or lamp so light hits your whole face evenly", "Camera at eye level, about an arm's length away", "Chin level, relaxed mouth, hair off the forehead", "Same spot every time, no filters or beauty mode"]
+            : ["Turn 90° so one ear faces the camera", "Stand or sit tall, look straight ahead, shoulders relaxed", "Keep the base of the neck and shoulder in frame", "Use the 5 s timer and prop the phone at head height"]
+          ).map((t) => <li key={t} className="flex gap-2"><Icon name="check" size={15} className="mt-0.5 shrink-0 text-emr-2" />{t}</li>)}
+        </ul>
+        {kind === "side" && <div className="mt-3"><PostureCompare /></div>}
+      </details>
       <div className="flex flex-wrap justify-center gap-2">
         {!on ? <button className="btn btn-vio" onClick={() => start()}><Icon name="camera" size={18} /> Open camera</button> : (
           <>

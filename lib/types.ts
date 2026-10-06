@@ -23,6 +23,7 @@ export interface Settings {
   sleepTargetH: number;
   /** Photos/scans are never uploaded; this just records the user acknowledged the notes. */
   acknowledged: boolean;
+  guideDismissed?: boolean;
   reminders: ReminderSettings;
 }
 

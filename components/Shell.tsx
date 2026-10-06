@@ -12,12 +12,14 @@ import { Scan } from "./Scan";
 import { Routine } from "./Routine";
 import { Onboarding } from "./Onboarding";
 import { Profile } from "./Profile";
+import { Help, Confetti } from "./Help";
 
 interface ShellCtx {
   go: (t: Tab) => void;
   startSession: (which: "am" | "pm") => void;
   runExercise: (id: ExerciseId) => void;
   openProfile: () => void;
+  openHelp: () => void;
 }
 const S = createContext<ShellCtx | null>(null);
 export const useShell = () => {
@@ -37,6 +39,8 @@ export function Shell() {
   const { state, day, today, streak, toast, toasts, updateLog } = useApp();
   const [tab, setTab] = useState<Tab>("dashboard");
   const [profile, setProfile] = useState(false);
+  const [help, setHelp] = useState(false);
+  const [party, setParty] = useState(0);
   const [runner, setRunner] = useState<{ title: string; items: Prescription[]; kind: "am" | "pm" | null; ids: ExerciseId[] } | null>(null);
   const s = state.settings;
 
@@ -73,6 +77,7 @@ export function Shell() {
   const ctx: ShellCtx = {
     go,
     openProfile: () => setProfile(true),
+    openHelp: () => setHelp(true),
     startSession: (which) => {
       const items = which === "am" ? plan.morning : plan.evening;
       setRunner({ title: `${which === "am" ? "Morning" : "Evening"} session · Day ${plan.day}`, items, kind: which, ids: items.map((i) => i.exercise) });
@@ -109,6 +114,7 @@ export function Shell() {
               <div className="lg:hidden"><Brand compact /></div>
               <div className="hidden lg:block"><div className="label">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div></div>
               <div className="flex items-center gap-2">
+                <button onClick={() => setHelp(true)} className="grid h-10 w-10 place-items-center rounded-full border border-line bg-white/5 text-sm font-extrabold text-vio-3 hover:bg-white/10" aria-label="How it works" title="How it works">?</button>
                 <div className="chip chip-warn !px-3 !py-1.5 text-sm" title="Current streak"><Icon name="flame" size={16} /> <span className="tnum">{streak.current}</span> day{streak.current === 1 ? "" : "s"}</div>
                 <button onClick={() => setProfile(true)} className="flex items-center gap-2 rounded-full border border-line bg-white/5 py-1 pl-1 pr-3 text-sm font-bold hover:bg-white/10" aria-label="Profile and settings">
                   <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-vio to-emr text-sm font-extrabold text-white">{(s.name || "You").slice(0, 1).toUpperCase()}</span>
@@ -144,6 +150,8 @@ export function Shell() {
 
       <Toasts toasts={toasts} />
       <Profile open={profile} onClose={() => setProfile(false)} />
+      <Help open={help} onClose={() => setHelp(false)} />
+      {party > 0 && <Confetti key={party} />}
       {runner && (
         <Runner
           open
@@ -153,7 +161,8 @@ export function Shell() {
           onComplete={() => {
             const kind = runner.kind;
             updateLog(today, (l) => ({ ...l, done: [...new Set([...l.done, ...runner.ids])], ...(kind === "am" ? { sessionAM: true } : {}), ...(kind === "pm" ? { sessionPM: true } : {}) }));
-            toast(kind ? "Session logged" : "Practice logged");
+            toast(kind ? "Session logged. Nice work." : "Practice logged");
+            if (kind) { setParty(Date.now()); setTimeout(() => setParty(0), 4200); }
           }}
         />
       )}

@@ -103,3 +103,11 @@ input[type="checkbox"] { accent-color: #10b981; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
+
+@keyframes nudge { from { transform: translateY(2px); opacity: .5; } to { transform: translateY(-4px); opacity: 1; } }
+@keyframes confetti { 0% { transform: translateY(-10vh) rotate(0); opacity: 1; } 100% { transform: translateY(105vh) rotate(720deg); opacity: 0; } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.shine { position: relative; overflow: hidden; }
+.shine::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.14) 50%, transparent 65%); transform: translateX(-120%); animation: shine 3.6s ease-in-out infinite; }
+@keyframes shine { 0%, 55% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+.glass-hero { background: linear-gradient(135deg, rgba(139,92,246,.28), rgba(16,185,129,.12) 60%, rgba(255,255,255,.04)); border: 1px solid rgba(196,181,253,.28); border-radius: 1.5rem; box-shadow: 0 24px 60px -30px rgba(139,92,246,.7), 0 1px 0 rgba(255,255,255,.1) inset; }
