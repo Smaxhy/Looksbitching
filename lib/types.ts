@@ -1,3 +1,5 @@
+export type Sex = "male" | "female" | "unspecified";
+
 export type Tab = "dashboard" | "posture" | "scan" | "routine";
 
 export interface ReminderSettings {
@@ -24,6 +26,9 @@ export interface Settings {
   /** Photos/scans are never uploaded; this just records the user acknowledged the notes. */
   acknowledged: boolean;
   guideDismissed?: boolean;
+  /** Confirmed 18+ for the appearance-rating features. */
+  adultConfirmed?: boolean;
+  sex?: Sex;
   reminders: ReminderSettings;
 }
 
@@ -53,11 +58,11 @@ export interface PhotoRecord {
   ts: number;
   dateKey: string;
   day: number;
-  kind: "front" | "side";
+  kind: "front" | "side" | "bodyFront" | "bodySide";
   dataUrl: string;
 }
 
-export type ScoreKey = "jaw" | "symmetry" | "skin" | "grooming";
+export type ScoreKey = "jaw" | "symmetry" | "skin" | "grooming" | "harmony" | "eyes" | "nose" | "structure" | "body";
 
 export interface SelfAssessment {
   submentalFullness: 1 | 2 | 3 | 4 | 5; // 1 = lean, 5 = very full
@@ -75,6 +80,62 @@ export interface SelfAssessment {
 export interface Measures {
   cvaDeg?: number; // craniovertebral angle
   cmaDeg?: number; // cervicomental angle
+  gonialDeg?: number; // jaw angle, side view
+  nasolabialDeg?: number;
+  convexityDeg?: number; // glabella-subnasale-pogonion
+}
+
+export interface BodyInputs {
+  heightCm?: number;
+  weightKg?: number;
+  waistCm?: number;
+  hipCm?: number;
+  neckCm?: number;
+  shoulderCm?: number; // shoulder (deltoid) circumference
+  age?: number;
+}
+
+export type FeatureGroup = "proportion" | "eyes" | "nose" | "mouth" | "jaw" | "midface" | "profile" | "skin" | "body" | "posture";
+
+export interface Feature {
+  id: string;
+  group: FeatureGroup;
+  label: string;
+  value: string;
+  /** Plain reference range shown to the user. */
+  ref: string;
+  /** 1-10, or null for descriptive-only traits with no "better" direction. */
+  score: number | null;
+  note: string;
+  confidence: "low" | "medium" | "high";
+  source: "photo" | "measured" | "manual" | "self";
+}
+
+export interface PoseFront {
+  shoulderTiltDeg: number;
+  hipTiltDeg: number;
+  headTiltDeg: number;
+  shoulderHipRatio: number;
+  legRatio: number;
+  pts: Record<string, [number, number]>;
+}
+export interface PoseSide {
+  headFwd: number; // ear ahead of shoulder, as fraction of torso length
+  shoulderFwd: number; // shoulder ahead of hip
+  facing: 1 | -1;
+  pts: Record<string, [number, number]>;
+}
+
+export interface AiReview {
+  model: string;
+  ts: number;
+  summary: string;
+  strengths: string[];
+  improvements: string[];
+  features: { name: string; rating: number; comment: string }[];
+  grooming: { hairstyle: string; facialHair: string; eyewear: string; skincare: string; style: string };
+  body: string;
+  caveats: string;
 }
 
 export interface FrontMetrics {
@@ -92,6 +153,11 @@ export interface FrontMetrics {
   thirds: [number, number, number];
   faceRatio: number; // face height / width
   quality: { yawOk: boolean; rollOk: boolean; pitchOk: boolean; bright: boolean };
+  ratios: Record<string, number>;
+  /** MediaPipe landmark index -> normalised [x, y] in the original photo. */
+  lm: Record<string, [number, number]>;
+  imgW: number;
+  imgH: number;
 }
 
 export interface CategoryResult {
@@ -112,9 +178,17 @@ export interface ScanResult {
   day: number;
   frontId?: string;
   sideId?: string;
+  bodyFrontId?: string;
+  bodySideId?: string;
   front?: FrontMetrics;
   measures: Measures;
   self: SelfAssessment;
+  sex?: Sex;
+  bodyInputs?: BodyInputs;
+  poseFront?: PoseFront;
+  poseSide?: PoseSide;
+  features?: Feature[];
+  aiReview?: AiReview;
   categories: CategoryResult[];
   overall: number;
   faceShape?: string;

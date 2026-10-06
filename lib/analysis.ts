@@ -1,4 +1,5 @@
-import type { CategoryResult, FrontMetrics, Measures, ScanResult, SelfAssessment, GlowAction } from "./types";
+import type { BodyInputs, CategoryResult, Feature, FrontMetrics, Measures, PoseFront, PoseSide, ScanResult, SelfAssessment, GlowAction, Sex } from "./types";
+import { bodyFeatures, band, frontFeatures, profileFeatures } from "./features";
 import { getLandmarker } from "./landmarker";
 
 type Pt = { x: number; y: number };
@@ -8,6 +9,8 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 const deg = (r: number) => (r * 180) / Math.PI;
 
 export class NoFaceError extends Error {}
+
+export const OVERLAY_IDX = [10, 9, 168, 6, 1, 2, 152, 234, 454, 33, 133, 159, 145, 263, 362, 386, 374, 468, 473, 105, 334, 55, 285, 46, 276, 129, 358, 61, 291, 0, 13, 14, 17, 172, 397, 136, 365, 150, 379, 149, 378, 176, 400, 148, 377, 58, 288, 132, 361, 93, 323, 21, 251, 50, 280];
 
 // ───────────────────────── front photo → metrics ─────────────────────────
 
@@ -135,7 +138,36 @@ export async function analyzeFront(img: HTMLImageElement | HTMLCanvasElement): P
   const thirdsTotal = dist(Q(10), Q(9)) + dist(Q(9), Q(2)) + dist(Q(2), Q(152));
   const thirds: [number, number, number] = [dist(Q(10), Q(9)) / thirdsTotal, dist(Q(9), Q(2)) / thirdsTotal, dist(Q(2), Q(152)) / thirdsTotal];
 
+  // ── feature ratios (crop space, so scale-free) ──
+  const D = (a: number, b: number) => dist(Q(a), Q(b));
+  const hasIris = raw.length > 473;
+  const mid2 = (a: Pt, b: Pt): Pt => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const ipd = hasIris ? D(468, 473) : dist(mid2(Q(33), Q(133)), mid2(Q(362), Q(263)));
+  const ang2 = (inner: number, outer: number) => deg(Math.atan2(Q(inner).y - Q(outer).y, Math.abs(Q(outer).x - Q(inner).x) || 1e-6));
+  const ratios: Record<string, number> = {
+    thirdsLM: D(2, 152) / D(9, 2),
+    lowerSplit: D(14, 152) / Math.max(D(2, 13), 1e-6),
+    fwhr: faceW / D(9, 0),
+    ipdW: ipd / faceW,
+    icdEw: D(133, 362) / ((D(33, 133) + D(362, 263)) / 2),
+    canthal: (ang2(133, 33) + ang2(362, 263)) / 2,
+    eyeOpen: (D(159, 145) / D(33, 133) + D(386, 374) / D(362, 263)) / 2,
+    browTilt: (ang2(55, 46) + ang2(285, 276)) / 2,
+    browEye: (D(105, 159) + D(334, 386)) / 2 / faceH,
+    noseW: D(129, 358) / D(133, 362),
+    noseWFace: D(129, 358) / faceW,
+    mouthW: D(61, 291) / ipd,
+    lipRatio: D(14, 17) / Math.max(D(0, 13), 1e-6),
+    chinW: D(176, 400) / D(172, 397),
+    cheekTaper: faceW / D(172, 397),
+    templeW: D(21, 251) / faceW,
+  };
+  for (const k of Object.keys(ratios)) ratios[k] = Math.round(ratios[k] * 1000) / 1000;
+  const lm: Record<string, [number, number]> = {};
+  for (const i of OVERLAY_IDX) if (raw[i]) lm[i] = [Math.round(raw[i].x * 10000) / 10000, Math.round(raw[i].y * 10000) / 10000];
+
   return {
+    ratios, lm, imgW: w, imgH: h,
     rollDeg: r1(roll), yawDeg: r1(yaw), pitchDeg: r1(pitch),
     asymmetry: Math.round(asym * 1000) / 1000,
     bigonialRatio: Math.round((bigonial / bizyg) * 100) / 100,
@@ -194,10 +226,12 @@ export function scoreCva(cva: number): number {
 }
 
 export function buildResult(args: {
-  id: string; dateKey: string; day: number; frontId?: string; sideId?: string;
+  id: string; dateKey: string; day: number; frontId?: string; sideId?: string; bodyFrontId?: string; bodySideId?: string;
   front?: FrontMetrics; measures: Measures; self: SelfAssessment; ctx: ScoreContext;
+  sex?: Sex; bodyInputs?: BodyInputs; poseFront?: PoseFront; poseSide?: PoseSide;
 }): ScanResult {
   const { front: f, measures: m, self: s, ctx } = args;
+  const sex: Sex = args.sex ?? "unspecified";
   const cats: CategoryResult[] = [];
 
   // Jawline & submental
@@ -294,12 +328,46 @@ export function buildResult(args: {
     cats.push({ key: "grooming", label: "Hairline & grooming", score: r1(score), confidence: "low", headline: score >= 8 ? "Sharp and well-kept" : score >= 6 ? "Solid with a few easy upgrades" : "Grooming is a quick win", details, basis: ["Self-assessed, because hairline and grooming cannot be judged reliably from landmarks.", "Weights: hairline 30%, hair 20%, teeth 20%, brows 15%, facial hair 15%."] });
   }
 
+  // ── detailed feature scorecard + extra categories ──
+  const features: Feature[] = [
+    ...(f ? frontFeatures(f, sex) : []),
+    ...profileFeatures(m, sex),
+    ...(f ? skinFeatures(f) : []),
+    ...(args.bodyInputs || args.poseFront || args.poseSide ? bodyFeatures(args.bodyInputs ?? {}, sex, args.poseFront, args.poseSide) : []),
+  ];
+  const catFrom = (key: CategoryResult["key"], label: string, ids: string[], groups: Feature["group"][] = []): void => {
+    const used = features.filter((x) => x.score != null && (ids.includes(x.id) || groups.includes(x.group)));
+    if (!used.length) return;
+    const wt = (c: Feature["confidence"]) => (c === "high" ? 1 : c === "medium" ? 0.8 : 0.5);
+    const score = weighted(used.map((x) => ({ v: x.score as number, w: wt(x.confidence) })));
+    const low = [...used].sort((a, b) => (a.score as number) - (b.score as number)).slice(0, 3);
+    cats.push({
+      key, label, score: r1(score), confidence: used.some((x) => x.confidence !== "low") ? "medium" : "low",
+      headline: score >= 8 ? "Strong, well-balanced" : score >= 6.5 ? "Solid with small differences" : "Several measurements outside the typical range",
+      details: low.map((x) => `${x.label}: ${x.value}. ${x.note}`),
+      basis: [`Average of ${used.length} measurements, weighted by confidence.`, ...used.map((x) => `${x.label} ${x.score}/10 (${x.confidence} confidence)`)],
+    });
+  };
+  catFrom("harmony", "Facial harmony", ["thirds", "lowersplit", "ipd", "icd"]);
+  catFrom("eyes", "Eyes & brows", ["canthal", "eyeopen", "browtilt", "browset", "darkcircle"]);
+  catFrom("nose", "Nose & lips", ["nosew", "mouthw", "lips", "nasolabial"]);
+  catFrom("structure", "Face structure (outline-based)", ["jawwidth", "jawedge", "gonial", "convexity"]);
+  catFrom("body", "Body & posture", [], ["body", "posture"]);
+
   const overall = r1(cats.reduce((a, c) => a + c.score, 0) / cats.length);
   let faceShape: string | undefined;
   if (f) {
     faceShape = f.bigonialRatio < 0.68 ? "Heart / tapered" : f.faceRatio > 1.45 ? "Long / oblong" : f.faceRatio < 1.28 ? (f.bigonialRatio >= 0.78 ? "Square" : "Round") : "Oval";
   }
-  return { id: args.id, ts: Date.now(), dateKey: args.dateKey, day: args.day, frontId: args.frontId, sideId: args.sideId, front: f, measures: m, self: s, categories: cats, overall, faceShape };
+  return { id: args.id, ts: Date.now(), dateKey: args.dateKey, day: args.day, frontId: args.frontId, sideId: args.sideId, bodyFrontId: args.bodyFrontId, bodySideId: args.bodySideId, front: f, measures: m, self: s, sex, bodyInputs: args.bodyInputs, poseFront: args.poseFront, poseSide: args.poseSide, features, categories: cats, overall, faceShape };
+}
+
+function skinFeatures(f: FrontMetrics): Feature[] {
+  return [
+    { id: "texture", group: "skin", label: "Cheek skin texture", value: String(f.texture), ref: "Lower is smoother (1.5–4 typical)", score: Math.round(Math.min(10, Math.max(3, 10 - (f.texture - 1.5) * 0.9)) * 10) / 10, confidence: "low", source: "photo", note: "Sharper, closer photos read as rougher. Compare scans taken the same way." },
+    { id: "darkcircle", group: "skin", label: "Under-eye darkness", value: `${(f.darkCircle * 100).toFixed(0)}% darker than cheek`, ref: "Under about 8%", score: Math.round(Math.min(10, Math.max(3.5, 10 - Math.max(0, f.darkCircle - 0.04) * 30)) * 10) / 10, confidence: "low", source: "photo", note: "Sleep, hydration and overhead shadow all matter, and some of it is structural or pigment." },
+    { id: "redness", group: "skin", label: "Cheek redness vs forehead", value: `${(f.redness * 1000).toFixed(0)}‰`, ref: "Under about 20‰", score: Math.round(Math.min(10, Math.max(4, 10 - Math.max(0, f.redness - 0.01) * 50)) * 10) / 10, confidence: "low", source: "photo", note: "Flushing, irritation or active breakouts raise it. Exercise and heat right before a photo do too." },
+  ];
 }
 
 // ───────────────────────── glow-up action list ─────────────────────────
@@ -351,6 +419,22 @@ export function buildActions(r: ScanResult, ctx: ScoreContext): GlowAction[] {
     A.push({ id: "groom", title: "Upgrade grooming basics", category: "grooming", priority: 3, studyIds: [],
       why: "Grooming is the quickest visible change available. It takes minutes a week.",
       how: ["Get a fresh haircut every 3–5 weeks suited to your face shape" + (r.faceShape ? ` (${r.faceShape}).` : "."), "Tidy only stray brow hairs and neaten the neckline and cheek line of any facial hair.", "Floss daily and consider a whitening or cleaning visit if teeth are a weak spot."] });
+  }
+  const bf = r.features?.find((x) => x.id === "bf"), whtr = r.features?.find((x) => x.id === "whtr");
+  if ((whtr && whtr.score != null && whtr.score < 8) || (bf && bf.score != null && bf.score < 8)) {
+    A.push({ id: "waist", title: "Bring your waist under half your height", category: "general", priority: 1, studyIds: ["vispute2011", "coetzee2009"],
+      why: "Waist-to-height is the best simple predictor in this scan, and the same fat loss that shrinks your waist also leans the jaw and neck.",
+      how: ["Track a weekly average weight and waist (at the navel) in Routine.", "Walk 8–10k steps a day, lift 2–3 times a week and keep protein high.", "Re-measure every 2–4 weeks. Don't chase single-day changes."] });
+  }
+  if ((r.poseSide && (r.poseSide.headFwd > 0.1 || r.poseSide.shoulderFwd > 0.06)) || (r.poseFront && Math.abs(r.poseFront.shoulderTiltDeg) > 2.5)) {
+    A.push({ id: "upper-back", title: "Strengthen the upper back and open the chest", category: "general", priority: 2, studyIds: ["falla2007"],
+      why: "Forward head and rolled shoulders go together. Neck flexor training plus upper-back strength is the practical combination.",
+      how: ["Rows, face pulls and band pull-aparts 2–3 times a week.", "Doorway chest stretch for 30 s, 3 times a day.", "Keep doing the chin tuck and neck curl sessions."] });
+  }
+  if (m.convexityDeg != null && m.convexityDeg < 160) {
+    A.push({ id: "chin", title: "Chin projection: what can and cannot change", category: "jaw", priority: 3, studyIds: ["ellenbogen1980"],
+      why: "A receding chin is mostly skeletal. Posture and body fat change how it reads, but not the bone.",
+      how: ["Fix head posture first. It brings the chin forward visually.", "Reduce submental fat if present.", "For structural change, an orthodontist or maxillofacial surgeon can discuss options (genioplasty, orthodontics)."] });
   }
   A.push({ id: "tongue-note", title: "Keep jaw and tongue work gentle", category: "general", priority: 3, studyIds: ["mewing", "robbins2005"],
     why: "Tongue-posture claims about reshaping the adult jaw are unproven. Strength and posture benefits are real, but over-pressing can cause jaw pain.",

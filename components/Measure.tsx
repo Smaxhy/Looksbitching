@@ -5,73 +5,72 @@ import type { Measures } from "@/lib/types";
 import { Icon } from "./ui";
 import { MeasureExample } from "./Demo";
 
-type Mode = "cva" | "cma";
 interface P { x: number; y: number } // normalised 0..1
+type Mode = "cva" | "cma" | "gonial" | "nasolabial" | "convexity";
 
-const STEPS: Record<Mode, { title: string; points: string[]; help: string }> = {
-  cva: {
-    title: "Craniovertebral angle (head posture)",
+interface Spec { key: Mode; field: keyof Measures; tab: string; title: string; points: string[]; help: string; ref: string; calc: (p: P[]) => number; guide: boolean }
+
+const SPECS: Spec[] = [
+  { key: "cva", field: "cvaDeg", tab: "Head posture", title: "Craniovertebral angle (head posture)", guide: false,
     points: ["C7: the bony bump at the base of the neck", "Tragus: the small flap in front of the ear canal"],
-    help: "The angle between the horizontal and the line from C7 to the ear. About 50° or more is typical. Smaller means the head sits forward.",
-  },
-  cma: {
-    title: "Cervicomental angle (chin–neck)",
+    help: "The angle between the horizontal and the line from C7 to the ear. About 50° or more is typical. Smaller means the head sits forward.", ref: "≥ 50° typical",
+    calc: (p) => craniovertebralAngle(p[0], p[1]) },
+  { key: "cma", field: "cmaDeg", tab: "Chin–neck", title: "Cervicomental angle (chin–neck)", guide: false,
     points: ["Under the chin where the chin meets the neck", "Deepest point of the neck/chin concavity", "A point further down the front of the neck"],
-    help: "The angle at the middle point between the two lines. The classic aesthetic benchmark is 105–120°.",
-  },
-};
+    help: "The angle at the middle point between the two lines. The classic aesthetic benchmark is 105–120°.", ref: "105–120° benchmark",
+    calc: (p) => angleAt(p[0], p[1], p[2]) },
+  { key: "gonial", field: "gonialDeg", tab: "Jaw angle", title: "Jaw angle (gonial angle)", guide: false,
+    points: ["Back of the jaw, up toward the earlobe (along the vertical jaw bone)", "The corner of the jaw (gonion)", "The bottom of the chin (menton)"],
+    help: "The angle at the jaw corner between the vertical jaw bone and the underside of the jaw. Smaller is more angular. Soft tissue can blur the real corner, so tap where you can see the edge.", ref: "about 115–130° typical",
+    calc: (p) => angleAt(p[0], p[1], p[2]) },
+  { key: "nasolabial", field: "nasolabialDeg", tab: "Nose–lip", title: "Nasolabial angle (nose tip rotation)", guide: false,
+    points: ["Just above the base of the nose (the columella, along the nose underside)", "The point where the nose meets the upper lip (subnasale)", "The middle of the upper lip's edge"],
+    help: "The angle at the nose–lip corner. Roughly 90–110° is typical.", ref: "90–110° typical",
+    calc: (p) => angleAt(p[0], p[1], p[2]) },
+  { key: "convexity", field: "convexityDeg", tab: "Profile line", title: "Profile convexity (forehead–nose–chin)", guide: false,
+    points: ["Glabella: the smooth spot between the brows", "Subnasale: where the nose meets the upper lip", "Pogonion: the most forward point of the chin"],
+    help: "The angle at the middle point. A straight to gently convex profile is about 160–175°. Lower values mean the chin sits further back.", ref: "160–175° typical",
+    calc: (p) => angleAt(p[0], p[1], p[2]) },
+];
 
 export function Measure({ src, value, onChange }: { src: string; value: Measures; onChange: (m: Measures) => void }) {
   const [mode, setMode] = useState<Mode>("cva");
-  const [pts, setPts] = useState<Record<Mode, P[]>>({ cva: [], cma: [] });
+  const [pts, setPts] = useState<Record<Mode, P[]>>({ cva: [], cma: [], gonial: [], nasolabial: [], convexity: [] });
   const img = useRef<HTMLImageElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<number | null>(null);
 
-  const need = STEPS[mode].points.length;
+  const spec = SPECS.find((s) => s.key === mode)!;
+  const need = spec.points.length;
   const cur = pts[mode];
 
-  const compute = (m: Mode, p: P[]) => {
+  const commit = (s: Spec, p: P[]) => {
     const el = img.current;
-    if (!el || p.length < STEPS[m].points.length) return undefined;
-    const w = el.naturalWidth, h = el.naturalHeight;
-    const px = p.map((q) => ({ x: q.x * w, y: q.y * h }));
-    return m === "cva" ? craniovertebralAngle(px[0], px[1]) : angleAt(px[0], px[1], px[2]);
-  };
-
-  const commit = (m: Mode, p: P[]) => {
-    const v = compute(m, p);
-    onChange({ ...value, ...(m === "cva" ? { cvaDeg: v } : { cmaDeg: v }) });
+    if (!el || p.length < s.points.length) { onChange({ ...value, [s.field]: undefined }); return; }
+    const px = p.map((q) => ({ x: q.x * el.naturalWidth, y: q.y * el.naturalHeight }));
+    onChange({ ...value, [s.field]: s.calc(px) });
   };
 
   const rel = (e: React.PointerEvent): P => {
     const r = box.current!.getBoundingClientRect();
     return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
   };
-
   const down = (e: React.PointerEvent) => {
     const q = rel(e);
-    // grab an existing point if close
     const near = cur.findIndex((p) => Math.hypot(p.x - q.x, p.y - q.y) < 0.04);
     if (near >= 0) { setDrag(near); (e.target as Element).setPointerCapture?.(e.pointerId); return; }
-    if (cur.length < need) {
-      const next = [...cur, q];
-      setPts({ ...pts, [mode]: next });
-      commit(mode, next);
-    }
+    if (cur.length < need) { const next = [...cur, q]; setPts({ ...pts, [mode]: next }); commit(spec, next); }
   };
   const move = (e: React.PointerEvent) => {
     if (drag == null) return;
     const q = rel(e);
     const next = cur.map((p, i) => (i === drag ? q : p));
-    setPts({ ...pts, [mode]: next });
-    commit(mode, next);
+    setPts({ ...pts, [mode]: next }); commit(spec, next);
   };
   const up = () => setDrag(null);
-
-  const reset = () => { setPts({ ...pts, [mode]: [] }); onChange({ ...value, ...(mode === "cva" ? { cvaDeg: undefined } : { cmaDeg: undefined }) }); };
-
-  const val = mode === "cva" ? value.cvaDeg : value.cmaDeg;
+  const reset = () => { setPts({ ...pts, [mode]: [] }); onChange({ ...value, [spec.field]: undefined }); };
+  const val = value[spec.field];
+  const doneCount = SPECS.filter((s) => value[s.field] != null).length;
 
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-6">
@@ -87,18 +86,20 @@ export function Measure({ src, value, onChange }: { src: string; value: Measures
         ))}
       </div>
       <div className="grid content-start gap-3">
-        <details open={cur.length === 0 && !value.cvaDeg} className="glass-flat p-3 text-sm"><summary className="cursor-pointer font-bold">Where do I tap? (example)</summary><div className="mt-2"><MeasureExample /></div></details>
-        <div className="flex gap-1 rounded-xl border border-line bg-white/[0.04] p-1">
-          {(["cva", "cma"] as Mode[]).map((m) => (
-            <button key={m} onClick={() => setMode(m)} className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold ${mode === m ? "bg-vio/50 text-white" : "text-ink-3"}`}>{m === "cva" ? "Head posture (CVA)" : "Chin–neck (CMA)"}</button>
+        <div className="flex flex-wrap gap-1 rounded-xl border border-line bg-white/[0.04] p-1">
+          {SPECS.map((s) => (
+            <button key={s.key} onClick={() => setMode(s.key)} className={`flex-1 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-bold ${mode === s.key ? "bg-vio/50 text-white" : "text-ink-3"}`}>
+              {value[s.field] != null && <span className="mr-1 text-emr-2">✓</span>}{s.tab}
+            </button>
           ))}
         </div>
+        <details open={cur.length === 0 && doneCount === 0} className="glass-flat p-3 text-sm"><summary className="cursor-pointer font-bold">Where do I tap? (example)</summary><div className="mt-2"><MeasureExample /></div></details>
         <div>
-          <h4 className="font-bold">{STEPS[mode].title}</h4>
-          <p className="text-xs text-ink-3">{STEPS[mode].help}</p>
+          <h4 className="font-bold">{spec.title}</h4>
+          <p className="text-xs text-ink-3">{spec.help}</p>
         </div>
         <ol className="grid gap-1.5 text-sm">
-          {STEPS[mode].points.map((t, i) => (
+          {spec.points.map((t, i) => (
             <li key={i} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${cur.length === i ? "bg-vio/20 text-white" : cur.length > i ? "text-emr-3" : "text-ink-3"}`}>
               <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-extrabold ${cur.length > i ? "bg-emr text-[#04140d]" : "bg-white/10"}`}>{i + 1}</span>{t}
             </li>
@@ -106,9 +107,10 @@ export function Measure({ src, value, onChange }: { src: string; value: Measures
         </ol>
         <div className="glass-flat flex items-center justify-between p-3">
           <div><div className="label">Result</div><div className="font-display text-3xl font-extrabold tnum">{val != null ? `${Math.round(val)}°` : "–"}</div></div>
-          <div className="text-right text-xs text-ink-3">{val == null ? "Tap the photo to place points. Drag to adjust." : mode === "cva" ? (val >= 50 ? "Within the typical range" : "Forward-head posture") : val >= 105 && val <= 120 ? "Inside the benchmark" : val > 120 ? "Wider than benchmark" : "Sharper than benchmark"}</div>
+          <div className="text-right text-xs text-ink-3">{val == null ? "Tap the photo to place points. Drag to adjust." : spec.ref}</div>
         </div>
         <button className="btn btn-sm w-fit" onClick={reset}><Icon name="reset" size={16} /> Clear these points</button>
+        <p className="text-[11px] text-ink-3">Each angle you add makes the report richer. {doneCount}/5 done. Skip any you are unsure about.</p>
       </div>
     </div>
   );
